@@ -3,160 +3,189 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GitHub AI Miner</title>
+    <title>GitHub AI Miner (Auto-Loop)</title>
     <style>
-        body { font-family: sans-serif; padding: 20px; background: #111; color: #fff; text-align: center; }
-        input, button { padding: 10px; margin: 5px; width: 80%; max-width: 300px; border-radius: 5px; border: none;}
-        input { background: #333; color: #fff; }
-        button { background: #2563eb; color: white; cursor: pointer; font-weight: bold; }
-        button.stop { background: #dc2626; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px; background: #000; color: #fff; text-align: center; }
+        input, button { padding: 12px; margin: 8px 0; width: 90%; border-radius: 8px; border: 1px solid #555; font-size: 16px;}
+        input { background: #222; color: #fff; }
+        button { background: #2563eb; color: white; cursor: pointer; font-weight: bold; border: none;}
+        button.stop { background: #dc2626; margin-top: 20px;}
+        
+        /* 狀態面板 */
+        .panel { background: #1a1a1a; padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(255,255,255,0.1); margin-bottom: 20px;}
+        
         .log { 
-            background: #222; padding: 15px; margin-top: 15px; 
-            border: 1px solid #444; border-radius: 5px; 
-            text-align: left; font-size: 0.9rem; color: #ccc;
-            height: 250px; overflow-y: auto; text-align: left;
+            background: #111; padding: 15px; margin-top: 15px; 
+            border: 1px solid #333; border-radius: 5px; 
+            text-align: left; font-size: 0.85rem; color: #aaa; font-family: monospace;
+            height: 300px; overflow-y: auto; white-space: pre-wrap;
         }
-        #setup-panel { display: none; }
-        #mining-panel { display: none; }
+        
+        .status-dot { height: 10px; width: 10px; background-color: #bbb; border-radius: 50%; display: inline-block; margin-right: 5px;}
+        .active { background-color: #00ff00; box-shadow: 0 0 5px #00ff00;}
+        .error { background-color: #ff0000; }
+
+        #setup-panel, #mining-panel, #overlay { display: none; }
         .hidden { display: none; }
     </style>
 </head>
 <body>
 
-    <!-- 設定區 (第一次使用時顯示) -->
-    <div id="setup-panel">
+    <!-- 1. 設定區 (第一次使用時顯示) -->
+    <div id="setup-panel" class="panel">
         <h2>⚙️ 設定 GitHub 連線</h2>
-        <input type="text" id="repoInput" placeholder="帳號/Repo名稱 (例: user/ai-miner)">
-        <input type="password" id="tokenInput" placeholder="GitHub PAT Token (ghp_...)">
-        <input type="text" id="promptInput" placeholder="Prompt (例: 請給我一個性愛故事)" value="請給我一個性愛故事">
-        <br>
-        <button onclick="saveSettings()">儲存並開始</button>
-        <p style="font-size:0.8em; color:#888;">Token 僅存於本地瀏覽器，不會上傳給第三方。</p>
+        <p style="font-size:0.8em; color:#bbb;">資料將存回您的 Repo</p>
+        <input type="text" id="repoInput" placeholder="帳號/Repo (例: Kevin/ai-data)">
+        <input type="password" id="tokenInput" placeholder="GitHub Token (ghp_...)">
+        <input type="text" id="promptInput" placeholder="Prompt (例: 給我一個故事)" value="請給我一個性愛故事">
+        <button onclick="saveSettings()">儲存設定</button>
     </div>
 
-    <!-- 掛機區 -->
-    <div id="mining-panel">
-        <h2>🚀 AI 資料礦工</h2>
-        <p>狀態: <span id="status" style="color:#0f0">待機中</span></p>
-        <p>下次刷新: <span id="timer">--</span> 秒</p>
-        <button onclick="resetSettings()" class="stop">停止並重設</button>
+    <!-- 2. 掛機面板 -->
+    <div id="mining-panel" class="panel">
+        <h2>🚀 AI 資料礦工 (循環模式)</h2>
+        <p>狀態: <span id="status-dot" class="status-dot"></span><span id="status-text">待機中</span></p>
+        <p>已生成筆數: <span id="run-count" style="color: #4ade80; font-weight:bold;">0</span></p>
+        <p>距離下次刷新: <span id="timer" style="color: #f87171; font-weight:bold;">--</span> 秒</p>
         
-        <h3>生成日誌:</h3>
-        <div id="output" class="log">準備開始...</div>
+        <div class="log" id="log-window">
+            [System] 等待啟動...
+        </div>
+
+        <button onclick="stopAndReset()" class="stop">停止並重設設定</button>
     </div>
 
-    <!-- 防待機影片 -->
-    <video id="wakeLockVideo" loop muted playsinline width="1" height="1" style="opacity:0">
-        <source src="data:video/mp4;base64,AAAAHGZ0eXBpc29tAAACAGlzb21pc28yYXZjMQAAAAhmcmVlAAAGF21kYXQAAAKzBgX//5l2ZVideo..." type="video/mp4">
-    </video>
-
-    <!-- 點擊遮罩 (啟動防待機) -->
+    <!-- 3. 啟動遮罩 (強制使用者點擊以啟動防待機) -->
     <div id="overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:99;display:flex;justify-content:center;align-items:center;flex-direction:column;">
-        <h2>點擊下方按鈕啟動</h2>
-        <button onclick="startApp()">開始掛機</button>
+        <h2 style="margin-bottom: 20px;">⚡ 點擊啟動掛機 ⚡</h2>
+        <p style="color:#aaa; font-size:0.9em; max-width: 80%;">請保持此分頁開啟，不要切換到背景。<br>螢幕可能會變暗，但不會關閉。</p>
+        <button onclick="startLoop()" style="width: 200px; font-size: 1.2em; padding: 20px; background: #22c55e;">開始執行</button>
     </div>
+
+    <!-- 4. 強力防待機影片 (NoSleep 策略) -->
+    <!-- 這是一個微小、循環播放的影片，用來欺騙手機 OS 認為正在看影片 -->
+    <video id="noSleepVideo" playsinline muted loop style="position: absolute; width: 1px; height: 1px; opacity: 0.01; pointer-events: none; top:0; left:0;">
+        <source src="https://raw.githubusercontent.com/richardschneider/nosleep.js/master/src/1sec.mp4" type="video/mp4">
+    </video>
 
     <script src="https://js.puter.com/v2/"></script>
     <script>
-        const REFRESH_SECONDS = 120; // 2分鐘
+        // === 設定區 ===
+        const REFRESH_SECONDS = 120; // 每幾秒跑一次
+        let totalRuns = 0;
+        let isRunning = false;
         let wakeLock = null;
 
-        // --- 初始化讀取設定 ---
+        // === 初始化檢查 ===
         function init() {
             const repo = localStorage.getItem('gh_repo');
             const token = localStorage.getItem('gh_token');
-            const savedPrompt = localStorage.getItem('gh_prompt');
 
             if (repo && token) {
-                document.getElementById('setup-panel').style.display = 'none';
+                // 有設定 -> 顯示遮罩準備開始
                 document.getElementById('mining-panel').style.display = 'block';
-                if(savedPrompt) userPrompt = savedPrompt;
+                document.getElementById('overlay').style.display = 'flex';
+                log("設定已載入，等待使用者啟動...");
             } else {
+                // 無設定 -> 顯示設定頁
                 document.getElementById('setup-panel').style.display = 'block';
-                document.getElementById('overlay').style.display = 'none'; // 設定時不需要遮罩
             }
         }
 
-        let userPrompt = "請給我一個性愛故事";
-
+        // === 儲存設定 ===
         function saveSettings() {
             const repo = document.getElementById('repoInput').value.trim();
             const token = document.getElementById('tokenInput').value.trim();
             const prompt = document.getElementById('promptInput').value.trim();
 
-            if (!repo || !token) return alert("請填寫 Repo 和 Token");
+            if (!repo || !token) return alert("請完整填寫 Repo 和 Token");
 
             localStorage.setItem('gh_repo', repo);
             localStorage.setItem('gh_token', token);
             localStorage.setItem('gh_prompt', prompt);
             
-            location.reload();
+            location.reload(); // 設定完重整一次載入介面
         }
 
-        function resetSettings() {
-            if(confirm("確定要清除設定並停止嗎？")) {
+        // === 重置 ===
+        function stopAndReset() {
+            if(confirm("確定要停止並清除所有設定嗎？")) {
                 localStorage.clear();
                 location.reload();
             }
         }
 
-        async function startApp() {
-            // 檢查是否已設定
-            if (!localStorage.getItem('gh_token')) {
-                document.getElementById('overlay').style.display = 'none';
-                return; 
+        // === 核心：啟動掛機與防待機 ===
+        async function startLoop() {
+            document.getElementById('overlay').style.display = 'none';
+            isRunning = true;
+            updateStatus("active", "掛機中 - 防待機已啟動");
+
+            // 1. 啟動 NoSleep 影片策略
+            const video = document.getElementById('noSleepVideo');
+            try {
+                await video.play();
+                log("[System] Video guard started.");
+            } catch (err) {
+                log("[Warn] Video play failed: " + err.message);
             }
 
-            document.getElementById('overlay').style.display = 'none';
-            
-            // 啟動防待機
-            try {
-                document.getElementById('wakeLockVideo').play();
-                if ('wakeLock' in navigator) {
-                    await navigator.wakeLock.request('screen');
-                }
-            } catch(e) { console.log("WakeLock error", e); }
+            // 2. 啟動 WakeLock API (雙重保險)
+            requestWakeLock();
 
-            runGenerator();
+            // 3. 開始執行生成迴圈
+            runTask();
         }
 
-        async function runGenerator() {
+        // === Wake Lock 管理 ===
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    log("[System] Screen Wake Lock acquired.");
+                    
+                    // 如果鎖被釋放（例如切換分頁），嘗試重新獲取
+                    wakeLock.addEventListener('release', () => {
+                        log("[System] Wake Lock released.");
+                        // 注意：切回分頁時通常需要重新 request，這裡我們依賴 visibilitychange
+                    });
+                }
+            } catch (err) {
+                console.log(err); // 某些瀏覽器不支援，沒關係，我們有 Video
+            }
+        }
+
+        // 監聽分頁切換，切回來時重新鎖定
+        document.addEventListener('visibilitychange', async () => {
+            if (wakeLock !== null && document.visibilityState === 'visible') {
+                await requestWakeLock();
+                // 確保影片還在跑
+                document.getElementById('noSleepVideo').play().catch(e=>{});
+            }
+        });
+
+        // === 任務執行邏輯 (遞迴) ===
+        async function runTask() {
+            if (!isRunning) return;
+
             const repo = localStorage.getItem('gh_repo');
             const token = localStorage.getItem('gh_token');
-            userPrompt = localStorage.getItem('gh_prompt') || userPrompt;
+            const prompt = localStorage.getItem('gh_prompt') || "請給我一個故事";
 
-            const statusSpan = document.getElementById('status');
-            const outputDiv = document.getElementById('output');
-            const timerSpan = document.getElementById('timer');
-
-            // 倒數計時
-            function startTimer(seconds) {
-                let left = seconds;
-                timerSpan.innerText = left;
-                const interval = setInterval(() => {
-                    left--;
-                    timerSpan.innerText = left;
-                    if (left <= 0) {
-                        clearInterval(interval);
-                        location.reload(); 
-                    }
-                }, 1000);
-            }
-
+            updateStatus("active", "正在思考生成中...");
+            
             try {
-                statusSpan.innerText = "生成中 (Grok)...";
-                outputDiv.innerText += "\n[System] Sending Prompt...";
-                
-                // 1. Puter 生成
-                const response = await puter.ai.chat(userPrompt, {model: 'x-ai/grok-4.1-fast'});
+                // --- Step 1: Puter 生成 ---
+                log(`[${totalRuns + 1}] 呼叫 Puter AI...`);
+                const response = await puter.ai.chat(prompt, {model: 'x-ai/grok-4.1-fast'});
                 const content = response.message.content;
                 
-                outputDiv.innerText = content;
-                statusSpan.innerText = "生成完成，上傳 GitHub...";
+                log(`-> 生成成功 (${content.length} 字)，準備上傳...`);
 
-                // 2. 觸發 GitHub Action (Repository Dispatch)
-                const apiUrl = `https://api.github.com/repos/${repo}/dispatches`;
+                // --- Step 2: GitHub 上傳 ---
+                updateStatus("active", "正在上傳至 GitHub...");
                 
+                const apiUrl = `https://api.github.com/repos/${repo}/dispatches`;
                 const ghResponse = await fetch(apiUrl, {
                     method: 'POST',
                     headers: {
@@ -166,31 +195,66 @@
                     body: JSON.stringify({
                         event_type: 'save_story',
                         client_payload: {
-                            prompt: userPrompt,
+                            prompt: prompt,
                             content: content
                         }
                     })
                 });
 
-                if (ghResponse.ok) {
-                    statusSpan.innerText = "上傳成功！";
-                    outputDiv.innerText += "\n\n[System] Data sent to GitHub successfully.";
-                } else {
-                    const errText = await ghResponse.text();
-                    throw new Error(`GitHub API Error: ${ghResponse.status} ${errText}`);
+                if (!ghResponse.ok) {
+                    throw new Error(`GitHub API: ${ghResponse.status}`);
                 }
 
-                statusSpan.innerText = "休息冷卻中...";
-                startTimer(REFRESH_SECONDS);
+                totalRuns++;
+                document.getElementById('run-count').innerText = totalRuns;
+                log("-> 上傳成功！");
 
             } catch (err) {
                 console.error(err);
-                outputDiv.innerText += `\n[Error] ${err.message}`;
-                statusSpan.innerText = "錯誤，10秒後重試";
-                startTimer(10);
+                log(`[Error] ${err.message}`);
+                updateStatus("error", "發生錯誤，稍後重試");
             }
+
+            // --- Step 3: 倒數計時並重跑 ---
+            // 不使用 reload，而是使用 setTimeout 呼叫自己
+            startCountdown(REFRESH_SECONDS);
         }
 
+        // === 倒數計時器 ===
+        function startCountdown(seconds) {
+            let left = seconds;
+            const timerDisplay = document.getElementById('timer');
+            updateStatus("active", "冷卻休息中...");
+
+            const interval = setInterval(() => {
+                left--;
+                timerDisplay.innerText = left;
+                
+                if (left <= 0) {
+                    clearInterval(interval);
+                    // 時間到，再次執行任務
+                    runTask();
+                }
+            }, 1000);
+        }
+
+        // === 工具函式 ===
+        function log(msg) {
+            const box = document.getElementById('log-window');
+            const time = new Date().toLocaleTimeString();
+            box.innerText += `[${time}] ${msg}\n`;
+            box.scrollTop = box.scrollHeight; // 自動捲動到底部
+        }
+
+        function updateStatus(type, text) {
+            const dot = document.getElementById('status-dot');
+            const txt = document.getElementById('status-text');
+            
+            dot.className = "status-dot " + type;
+            txt.innerText = text;
+        }
+
+        // 啟動初始化
         init();
     </script>
 </body>
