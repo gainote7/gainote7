@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub AI Miner</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #111; color: #fff; text-align: center; }
+        input, button { padding: 10px; margin: 5px; width: 80%; max-width: 300px; border-radius: 5px; border: none;}
+        input { background: #333; color: #fff; }
+        button { background: #2563eb; color: white; cursor: pointer; font-weight: bold; }
+        button.stop { background: #dc2626; }
+        .log { 
+            background: #222; padding: 15px; margin-top: 15px; 
+            border: 1px solid #444; border-radius: 5px; 
+            text-align: left; font-size: 0.9rem; color: #ccc;
+            height: 250px; overflow-y: auto; text-align: left;
+        }
+        #setup-panel { display: none; }
+        #mining-panel { display: none; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+    <!-- 設定區 (第一次使用時顯示) -->
+    <div id="setup-panel">
+        <h2>⚙️ 設定 GitHub 連線</h2>
+        <input type="text" id="repoInput" placeholder="帳號/Repo名稱 (例: user/ai-miner)">
+        <input type="password" id="tokenInput" placeholder="GitHub PAT Token (ghp_...)">
+        <input type="text" id="promptInput" placeholder="Prompt (例: 請給我一個性愛故事)" value="請給我一個性愛故事">
+        <br>
+        <button onclick="saveSettings()">儲存並開始</button>
+        <p style="font-size:0.8em; color:#888;">Token 僅存於本地瀏覽器，不會上傳給第三方。</p>
+    </div>
+
+    <!-- 掛機區 -->
+    <div id="mining-panel">
+        <h2>🚀 AI 資料礦工</h2>
+        <p>狀態: <span id="status" style="color:#0f0">待機中</span></p>
+        <p>下次刷新: <span id="timer">--</span> 秒</p>
+        <button onclick="resetSettings()" class="stop">停止並重設</button>
+        
+        <h3>生成日誌:</h3>
+        <div id="output" class="log">準備開始...</div>
+    </div>
+
+    <!-- 防待機影片 -->
+    <video id="wakeLockVideo" loop muted playsinline width="1" height="1" style="opacity:0">
+        <source src="data:video/mp4;base64,AAAAHGZ0eXBpc29tAAACAGlzb21pc28yYXZjMQAAAAhmcmVlAAAGF21kYXQAAAKzBgX//5l2ZVideo..." type="video/mp4">
+    </video>
+
+    <!-- 點擊遮罩 (啟動防待機) -->
+    <div id="overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:99;display:flex;justify-content:center;align-items:center;flex-direction:column;">
+        <h2>點擊下方按鈕啟動</h2>
+        <button onclick="startApp()">開始掛機</button>
+    </div>
+
+    <script src="https://js.puter.com/v2/"></script>
+    <script>
+        const REFRESH_SECONDS = 120; // 2分鐘
+        let wakeLock = null;
+
+        // --- 初始化讀取設定 ---
+        function init() {
+            const repo = localStorage.getItem('gh_repo');
+            const token = localStorage.getItem('gh_token');
+            const savedPrompt = localStorage.getItem('gh_prompt');
+
+            if (repo && token) {
+                document.getElementById('setup-panel').style.display = 'none';
+                document.getElementById('mining-panel').style.display = 'block';
+                if(savedPrompt) userPrompt = savedPrompt;
+            } else {
+                document.getElementById('setup-panel').style.display = 'block';
+                document.getElementById('overlay').style.display = 'none'; // 設定時不需要遮罩
+            }
+        }
+
+        let userPrompt = "請給我一個性愛故事";
+
+        function saveSettings() {
+            const repo = document.getElementById('repoInput').value.trim();
+            const token = document.getElementById('tokenInput').value.trim();
+            const prompt = document.getElementById('promptInput').value.trim();
+
+            if (!repo || !token) return alert("請填寫 Repo 和 Token");
+
+            localStorage.setItem('gh_repo', repo);
+            localStorage.setItem('gh_token', token);
+            localStorage.setItem('gh_prompt', prompt);
+            
+            location.reload();
+        }
+
+        function resetSettings() {
+            if(confirm("確定要清除設定並停止嗎？")) {
+                localStorage.clear();
+                location.reload();
+            }
+        }
+
+        async function startApp() {
+            // 檢查是否已設定
+            if (!localStorage.getItem('gh_token')) {
+                document.getElementById('overlay').style.display = 'none';
+                return; 
+            }
+
+            document.getElementById('overlay').style.display = 'none';
+            
+            // 啟動防待機
+            try {
+                document.getElementById('wakeLockVideo').play();
+                if ('wakeLock' in navigator) {
+                    await navigator.wakeLock.request('screen');
+                }
+            } catch(e) { console.log("WakeLock error", e); }
+
+            runGenerator();
+        }
+
+        async function runGenerator() {
+            const repo = localStorage.getItem('gh_repo');
+            const token = localStorage.getItem('gh_token');
+            userPrompt = localStorage.getItem('gh_prompt') || userPrompt;
+
+            const statusSpan = document.getElementById('status');
+            const outputDiv = document.getElementById('output');
+            const timerSpan = document.getElementById('timer');
+
+            // 倒數計時
+            function startTimer(seconds) {
+                let left = seconds;
+                timerSpan.innerText = left;
+                const interval = setInterval(() => {
+                    left--;
+                    timerSpan.innerText = left;
+                    if (left <= 0) {
+                        clearInterval(interval);
+                        location.reload(); 
+                    }
+                }, 1000);
+            }
+
+            try {
+                statusSpan.innerText = "生成中 (Grok)...";
+                outputDiv.innerText += "\n[System] Sending Prompt...";
+                
+                // 1. Puter 生成
+                const response = await puter.ai.chat(userPrompt, {model: 'x-ai/grok-4.1-fast'});
+                const content = response.message.content;
+                
+                outputDiv.innerText = content;
+                statusSpan.innerText = "生成完成，上傳 GitHub...";
+
+                // 2. 觸發 GitHub Action (Repository Dispatch)
+                const apiUrl = `https://api.github.com/repos/${repo}/dispatches`;
+                
+                const ghResponse = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `token ${token}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    },
+                    body: JSON.stringify({
+                        event_type: 'save_story',
+                        client_payload: {
+                            prompt: userPrompt,
+                            content: content
+                        }
+                    })
+                });
+
+                if (ghResponse.ok) {
+                    statusSpan.innerText = "上傳成功！";
+                    outputDiv.innerText += "\n\n[System] Data sent to GitHub successfully.";
+                } else {
+                    const errText = await ghResponse.text();
+                    throw new Error(`GitHub API Error: ${ghResponse.status} ${errText}`);
+                }
+
+                statusSpan.innerText = "休息冷卻中...";
+                startTimer(REFRESH_SECONDS);
+
+            } catch (err) {
+                console.error(err);
+                outputDiv.innerText += `\n[Error] ${err.message}`;
+                statusSpan.innerText = "錯誤，10秒後重試";
+                startTimer(10);
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
