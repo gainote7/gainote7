@@ -1,0 +1,82 @@
+name: Save Data
+
+on:
+  repository_dispatch:
+    types: [save_story]
+
+permissions:
+  contents: write
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Update JSON File
+        env:
+          PAYLOAD_CONTEXT: ${{ toJson(github.event.client_payload) }}
+        run: |
+          import json
+          import os
+          from datetime import datetime
+
+          # 讀取 payload
+          payload_str = os.environ.get('PAYLOAD_CONTEXT')
+          payload = json.loads(payload_str)
+          
+          prompt = payload.get('prompt', '')
+          content = payload.get('content', '')
+          timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+          # 建立符合 LLM Training Data 的格式 (Alpaca format)
+          new_entry = {
+              "instruction": prompt,
+              "input": "",
+              "output": content,
+              "timestamp": timestamp
+          }
+
+          file_path = 'dataset.json'
+          data = []
+
+          # 讀取舊資料
+          if os.path.exists(file_path):
+              try:
+                  with open(file_path, 'r', encoding='utf-8') as f:
+                      content = f.read().strip()
+                      if content:
+                          data = json.loads(content)
+              except Exception as e:
+                  print(f"Error reading file: {e}")
+                  data = []
+
+          # 確保 data 是 list
+          if not isinstance(data, list):
+              data = []
+
+          # 附加新資料
+          data.append(new_entry)
+
+          # 寫回檔案
+          with open(file_path, 'w', encoding='utf-8') as f:
+              json.dump(data, f, ensure_ascii=False, indent=4)
+          
+          print(f"Added entry. Total count: {len(data)}")
+
+        shell: python
+
+      - name: Commit and Push
+        run: |
+          git config --global user.name "AI Miner Bot"
+          git config --global user.email "bot@noreply.github.com"
+          git add dataset.json
+          # 如果沒有變更就不 commit (避免錯誤)
+          git commit -m "Add generated story data [skip ci]" || exit 0
+          git push
