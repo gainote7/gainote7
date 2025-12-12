@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GitHub AI Miner (Auto-Loop)</title>
+    <title>GitHub AI Miner (Randomized)</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px; background: #000; color: #fff; text-align: center; }
         input, button { padding: 12px; margin: 8px 0; width: 90%; border-radius: 8px; border: 1px solid #555; font-size: 16px;}
@@ -31,19 +31,19 @@
 </head>
 <body>
 
-    <!-- 1. 設定區 (第一次使用時顯示) -->
+    <!-- 1. 設定區 -->
     <div id="setup-panel" class="panel">
         <h2>⚙️ 設定 GitHub 連線</h2>
         <p style="font-size:0.8em; color:#bbb;">資料將存回您的 Repo</p>
         <input type="text" id="repoInput" placeholder="帳號/Repo (例: Kevin/ai-data)">
         <input type="password" id="tokenInput" placeholder="GitHub Token (ghp_...)">
-        <input type="text" id="promptInput" placeholder="Prompt (例: 給我一個故事)" value="請給我一個性愛故事">
+        <input type="text" id="promptInput" placeholder="基礎 Prompt (例: 寫一個故事)" value="請給我一個性愛故事">
         <button onclick="saveSettings()">儲存設定</button>
     </div>
 
     <!-- 2. 掛機面板 -->
     <div id="mining-panel" class="panel">
-        <h2>🚀 AI 資料礦工 (循環模式)</h2>
+        <h2>🚀 AI 資料礦工 (隨機元素版)</h2>
         <p>狀態: <span id="status-dot" class="status-dot"></span><span id="status-text">待機中</span></p>
         <p>已生成筆數: <span id="run-count" style="color: #4ade80; font-weight:bold;">0</span></p>
         <p>距離下次刷新: <span id="timer" style="color: #f87171; font-weight:bold;">--</span> 秒</p>
@@ -55,44 +55,101 @@
         <button onclick="stopAndReset()" class="stop">停止並重設設定</button>
     </div>
 
-    <!-- 3. 啟動遮罩 (強制使用者點擊以啟動防待機) -->
+    <!-- 3. 啟動遮罩 -->
     <div id="overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:99;display:flex;justify-content:center;align-items:center;flex-direction:column;">
         <h2 style="margin-bottom: 20px;">⚡ 點擊啟動掛機 ⚡</h2>
-        <p style="color:#aaa; font-size:0.9em; max-width: 80%;">請保持此分頁開啟，不要切換到背景。<br>螢幕可能會變暗，但不會關閉。</p>
+        <p style="color:#aaa; font-size:0.9em; max-width: 80%;">請保持此分頁開啟，不要切換到背景。<br>系統將自動隨機加入元素生成。</p>
         <button onclick="startLoop()" style="width: 200px; font-size: 1.2em; padding: 20px; background: #22c55e;">開始執行</button>
     </div>
 
-    <!-- 4. 強力防待機影片 (NoSleep 策略) -->
-    <!-- 這是一個微小、循環播放的影片，用來欺騙手機 OS 認為正在看影片 -->
+    <!-- 4. 強力防待機影片 -->
     <video id="noSleepVideo" playsinline muted loop style="position: absolute; width: 1px; height: 1px; opacity: 0.01; pointer-events: none; top:0; left:0;">
         <source src="https://raw.githubusercontent.com/richardschneider/nosleep.js/master/src/1sec.mp4" type="video/mp4">
     </video>
 
     <script src="https://js.puter.com/v2/"></script>
     <script>
-        // === 設定區 ===
-        const REFRESH_SECONDS = 120; // 每幾秒跑一次
+        // ============================================
+        // ★ 自定義隨機元素列表 (請在這裡修改你想隨機抽取的內容)
+        // ============================================
+        const randomElements = [
+            // 關係與角色類
+            "亂倫禁忌", "母子亂倫", "母親誘惑兒子", "父女亂倫", "父親侵犯女兒", "兄妹亂倫", "兄妹初次性愛",
+            "姐弟亂倫", "姐姐調教弟弟", "繼親亂倫", "繼母勾引繼子", "叔姪亂倫", "叔叔與姪女",
+            "孿生兄妹", "雙胞胎性愛", "家庭群交", "全家亂倫派對",
+            "人妻偷情", "人妻被鄰居誘惑", "熟女誘惑", "熟女與年輕男子", "人妻被姦", "人妻輪姦派對",
+            "人妻交換", "夫妻交換伴侶", "名人明星", "偶像藝人幻想", "粉絲與明星性愛", "老闆與員工",
+            "老闆強迫秘書", "醫生與病人", "醫生檢查變性愛", "警察與嫌疑人", "女警制服誘惑",
+        
+            // 師生與校園類
+            "師生戀", "女老師誘惑學生", "男老師調教女生", "校園青春", "學生妹誘惑", "處女學生破處",
+            "處男學生初體驗", "校園欺凌變性愛", "宿舍室友性愛",
+        
+            // 同性與多元性向類
+            "同性男男", "男男首次", "男男浪漫", "同性女女", "女女親吻舔陰", "女女亂倫", "雙性戀三角",
+            "跨性別戀情", "變裝皇后", "女性化轉型", "跨性別性愛", "Femboy男孩", "Twink年輕男子",
+        
+            // 暴力與強制類
+            "強暴輪姦", "迷姦用藥", "腦洗控制", "綁縛調教", "SM虐待", "奴隸訓練", "變態凌辱",
+            "非自願性愛", "強迫高潮", "輕度綁縛", "皮革道具",
+        
+            // 群體與多人間類
+            "群交多P", "輪姦多人", "3P雙飛", "兩男一女", "兩女一男", "換妻伴侶交換", "派對群交",
+            "六人混戰", "多人輪流",
+        
+            // 首次與特殊經驗類
+            "首次破處", "處女破處", "處男初體驗", "首次肛交", "首次口交", "十八歲處女", "十八歲處男",
+            "女性自慰", "女性高潮", "女性首次高潮",
+        
+            // 奇幻與異種類
+            "奇幻怪物", "觸手異種侵犯", "科幻未來性愛", "人外戀情", "身體擴張", "乳房擴張", "轉型變身",
+            "繁殖懷孕幻想", "吸血鬼性愛", "狼人性愛",
+        
+            // 暴露與觀察類
+            "暴露展覽", "公共暴露", "偷窺觀察", "戶外野合", "電影院摸索", "電梯密室暴露", "偷窺鄰居性愛",
+        
+            // 職業與穿搭服裝類
+            "職業制服", "護士制服誘惑", "女警制服", "空姐制服", "秘書OL裝", "女僕裝侍奉",
+            "絲襪高跟", "黑絲白絲", "吊帶襪", "緊身衣", "泳裝比基尼", "內衣誘惑", "內褲戀物",
+            "皮革裝備", "蕾絲內衣", "胸罩脫落",
+        
+            // 場地與情境類
+            "校園教室性愛", "辦公室戀情", "公車車廂摸索", "電梯密室", "酒店開房", "浴室淋浴性愛",
+            "戶外公園野戰", "KTV包廂群交", "家庭臥室偷情", "廁所偷情", "度假勝地性愛", "真愛浪漫性愛",
+            "腦洗情境", "計劃未來性愛",
+        
+            // 特殊癖好與身體類
+            "戀物癖好", "足控戀足", "內褲戀物", "巨乳豐臀", "懷孕繁殖", "噴奶哺乳", "肛交後門",
+            "口交深喉", "顏射吞精", "69姿勢", "舔陰", "舔肛", "女性支配", "女性順從", "男性支配",
+            "男性順從", "BDSM道具", "玩具自慰", "振動器使用",
+        
+            // 背景與風格類
+            "武俠古裝", "歷史宮廷後宮", "都市豔遇", "辦公室偷情", "鄰居誘惑", "援交交易",
+            "妓女一夜情", "美女豔遇", "淫蕩蕩婦", "變態色狼", "恐怖情色", "幽默諷刺性愛",
+            "科幻幻想", "非人類生物", "信件日記形式", "評論隨筆", "插圖情色", "音頻情色",
+            "非英文語言", "名人粉絲小說", "跨種族戀愛"
+        ];
+        // ============================================
+
+        const REFRESH_SECONDS = 30; // 每幾秒跑一次
         let totalRuns = 0;
         let isRunning = false;
         let wakeLock = null;
 
-        // === 初始化檢查 ===
         function init() {
             const repo = localStorage.getItem('gh_repo');
             const token = localStorage.getItem('gh_token');
 
             if (repo && token) {
-                // 有設定 -> 顯示遮罩準備開始
                 document.getElementById('mining-panel').style.display = 'block';
                 document.getElementById('overlay').style.display = 'flex';
                 log("設定已載入，等待使用者啟動...");
+                log(`目前共有 ${randomElements.length} 個隨機元素待命。`);
             } else {
-                // 無設定 -> 顯示設定頁
                 document.getElementById('setup-panel').style.display = 'block';
             }
         }
 
-        // === 儲存設定 ===
         function saveSettings() {
             const repo = document.getElementById('repoInput').value.trim();
             const token = document.getElementById('tokenInput').value.trim();
@@ -104,10 +161,9 @@
             localStorage.setItem('gh_token', token);
             localStorage.setItem('gh_prompt', prompt);
             
-            location.reload(); // 設定完重整一次載入介面
+            location.reload();
         }
 
-        // === 重置 ===
         function stopAndReset() {
             if(confirm("確定要停止並清除所有設定嗎？")) {
                 localStorage.clear();
@@ -115,76 +171,60 @@
             }
         }
 
-        // === 核心：啟動掛機與防待機 ===
         async function startLoop() {
             document.getElementById('overlay').style.display = 'none';
             isRunning = true;
             updateStatus("active", "掛機中 - 防待機已啟動");
 
-            // 1. 啟動 NoSleep 影片策略
             const video = document.getElementById('noSleepVideo');
-            try {
-                await video.play();
-                log("[System] Video guard started.");
-            } catch (err) {
-                log("[Warn] Video play failed: " + err.message);
-            }
-
-            // 2. 啟動 WakeLock API (雙重保險)
+            try { await video.play(); } catch (err) { }
             requestWakeLock();
-
-            // 3. 開始執行生成迴圈
             runTask();
         }
 
-        // === Wake Lock 管理 ===
         async function requestWakeLock() {
             try {
                 if ('wakeLock' in navigator) {
                     wakeLock = await navigator.wakeLock.request('screen');
-                    log("[System] Screen Wake Lock acquired.");
-                    
-                    // 如果鎖被釋放（例如切換分頁），嘗試重新獲取
-                    wakeLock.addEventListener('release', () => {
-                        log("[System] Wake Lock released.");
-                        // 注意：切回分頁時通常需要重新 request，這裡我們依賴 visibilitychange
-                    });
+                    wakeLock.addEventListener('release', () => { });
                 }
-            } catch (err) {
-                console.log(err); // 某些瀏覽器不支援，沒關係，我們有 Video
-            }
+            } catch (err) { console.log(err); }
         }
 
-        // 監聽分頁切換，切回來時重新鎖定
         document.addEventListener('visibilitychange', async () => {
             if (wakeLock !== null && document.visibilityState === 'visible') {
                 await requestWakeLock();
-                // 確保影片還在跑
                 document.getElementById('noSleepVideo').play().catch(e=>{});
             }
         });
 
-        // === 任務執行邏輯 (遞迴) ===
+        // === 任務執行邏輯 ===
         async function runTask() {
             if (!isRunning) return;
 
             const repo = localStorage.getItem('gh_repo');
             const token = localStorage.getItem('gh_token');
-            const prompt = localStorage.getItem('gh_prompt') || "請給我一個故事";
+            const basePrompt = localStorage.getItem('gh_prompt') || "請給我一個故事";
 
-            updateStatus("active", "正在思考生成中...");
+            updateStatus("active", "正在抽選元素並生成...");
             
             try {
-                // --- Step 1: Puter 生成 ---
-                log(`[${totalRuns + 1}] 呼叫 Puter AI...`);
-                const response = await puter.ai.chat(prompt, {model: 'x-ai/grok-4.1-fast'});
+                // 1. 隨機抽選元素
+                const randomEl = randomElements[Math.floor(Math.random() * randomElements.length)];
+                
+                // 2. 組合新的 Prompt
+                const finalPrompt = `${basePrompt} (關於: ${randomEl})`;
+                
+                log(`[${totalRuns + 1}] 題目: ${finalPrompt}`);
+                log(`    呼叫 Puter AI 中...`);
+
+                // 3. Puter 生成
+                const response = await puter.ai.chat(finalPrompt, {model: 'x-ai/grok-4.1-fast'});
                 const content = response.message.content;
                 
-                log(`-> 生成成功 (${content.length} 字)，準備上傳...`);
+                log(`    -> 生成成功 (${content.length} 字)，上傳中...`);
 
-                // --- Step 2: GitHub 上傳 ---
-                updateStatus("active", "正在上傳至 GitHub...");
-                
+                // 4. GitHub 上傳 (注意：這裡我們傳 finalPrompt 給 instruction，這樣訓練資料才準確)
                 const apiUrl = `https://api.github.com/repos/${repo}/dispatches`;
                 const ghResponse = await fetch(apiUrl, {
                     method: 'POST',
@@ -195,19 +235,17 @@
                     body: JSON.stringify({
                         event_type: 'save_story',
                         client_payload: {
-                            prompt: prompt,
+                            prompt: finalPrompt, // 存入 JSON 的是組合後的 Prompt
                             content: content
                         }
                     })
                 });
 
-                if (!ghResponse.ok) {
-                    throw new Error(`GitHub API: ${ghResponse.status}`);
-                }
+                if (!ghResponse.ok) throw new Error(`GitHub API: ${ghResponse.status}`);
 
                 totalRuns++;
                 document.getElementById('run-count').innerText = totalRuns;
-                log("-> 上傳成功！");
+                log("    -> 上傳成功！");
 
             } catch (err) {
                 console.error(err);
@@ -215,12 +253,9 @@
                 updateStatus("error", "發生錯誤，稍後重試");
             }
 
-            // --- Step 3: 倒數計時並重跑 ---
-            // 不使用 reload，而是使用 setTimeout 呼叫自己
             startCountdown(REFRESH_SECONDS);
         }
 
-        // === 倒數計時器 ===
         function startCountdown(seconds) {
             let left = seconds;
             const timerDisplay = document.getElementById('timer');
@@ -229,32 +264,27 @@
             const interval = setInterval(() => {
                 left--;
                 timerDisplay.innerText = left;
-                
                 if (left <= 0) {
                     clearInterval(interval);
-                    // 時間到，再次執行任務
                     runTask();
                 }
             }, 1000);
         }
 
-        // === 工具函式 ===
         function log(msg) {
             const box = document.getElementById('log-window');
             const time = new Date().toLocaleTimeString();
             box.innerText += `[${time}] ${msg}\n`;
-            box.scrollTop = box.scrollHeight; // 自動捲動到底部
+            box.scrollTop = box.scrollHeight;
         }
 
         function updateStatus(type, text) {
             const dot = document.getElementById('status-dot');
             const txt = document.getElementById('status-text');
-            
             dot.className = "status-dot " + type;
             txt.innerText = text;
         }
 
-        // 啟動初始化
         init();
     </script>
 </body>
