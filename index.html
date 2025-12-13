@@ -219,7 +219,7 @@
                 log(`    呼叫 Puter AI 中...`);
 
                 // 3. Puter 生成
-                const response = await puter.ai.chat(finalPrompt, {model: 'x-ai/grok-4.1-fast'});
+                const response = await puter.ai.chat(finalPrompt, {model: 'x-ai/grok-4-fast:free'});
                 const content = response.message.content;
                 
                 log(`    -> 生成成功 (${content.length} 字)，上傳中...`);
@@ -288,4 +288,5 @@
         init();
     </script>
 </body>
+
 </html>
