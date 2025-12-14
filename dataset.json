@@ -2554,5 +2554,16 @@
         "input": "",
         "output": "### 從男孩變成蕩婦的秘密之夜\n\n小明是一個二十五歲的普通上班",
         "timestamp": "2025-12-13 18:41:42"
+    },
+    {
+        "instruction": "請給我一個長篇繁體中文性愛故事（故事名稱請隨機不要跟主題一樣,標題直接直白一點） (關於: 懷孕繁殖)",
+        "input": "",
+        "output": [
+            {
+                "text": "You have reached your AI usage limit for this account.",
+                "type": "text"
+            }
+        ],
+        "timestamp": "2025-12-14 02:48:41"
     }
 ]
